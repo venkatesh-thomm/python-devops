@@ -206,14 +206,6 @@ Your Lambda role should include:
 
 ---
 
-## 🔥 Alternative Approach
-
-For enterprise environments, consider using:
-
-👉 AWS managed backup services (instead of custom scripts)
-
----
-
 ## 📈 Benefits
 
 * 💰 Cost Optimization
@@ -223,9 +215,6 @@ For enterprise environments, consider using:
 
 ---
 
-## 👨‍💻 Author
 
-**Venkatesh Thommandru**
-DevOps | AWS | Automation Enthusiast
 
----
+
