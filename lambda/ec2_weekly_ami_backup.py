@@ -1,126 +1,142 @@
 import boto3
 import datetime
 import logging
+import os
+from botocore.exceptions import ClientError
 
-# Setup logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-ec2_client = boto3.client('ec2')
+ec2 = boto3.client('ec2')
 
-# Configuration
-INSTANCE_TAG_NAME = 'dev-mysql'
-RETENTION_DAYS = 7
-RETENTION_HOURS = 1  
+# Config (move to env vars in Lambda ideally)
+INSTANCE_TAG_NAME = os.getenv('INSTANCE_TAG_NAME', 'dev-mysql')
+RETENTION_DAYS = int(os.getenv('RETENTION_DAYS', '7'))
+RETENTION_HOURS = int(os.getenv('RETENTION_HOURS', '0'))
 
 
 def get_instance_ids():
-    """Fetch EC2 instances based on Name tag"""
+    """Fetch instances with pagination"""
+    instance_ids = []
+    paginator = ec2.get_paginator('describe_instances')
+
     try:
-        response = ec2_client.describe_instances(
+        for page in paginator.paginate(
             Filters=[
                 {'Name': 'tag:Name', 'Values': [INSTANCE_TAG_NAME]},
                 {'Name': 'instance-state-name', 'Values': ['running']}
             ]
-        )
-
-        instance_ids = [
-            instance['InstanceId']
-            for reservation in response['Reservations']
-            for instance in reservation['Instances']
-        ]
+        ):
+            for res in page['Reservations']:
+                for inst in res['Instances']:
+                    instance_ids.append(inst['InstanceId'])
 
         return instance_ids
 
-    except Exception as e:
-        logger.error(f"Error fetching instances: {str(e)}")
+    except ClientError as e:
+        logger.error(f"AWS error fetching instances: {e}")
         return []
 
 
 def create_backup(instance_id):
-    """Create AMI backup"""
+    """Create AMI"""
     try:
         timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H%M%S')
         ami_name = f'backup-{instance_id}-{timestamp}'
 
-        response = ec2_client.create_image(
+        response = ec2.create_image(
             InstanceId=instance_id,
             Name=ami_name,
-            Description=f'Automated backup created on {timestamp}',
             NoReboot=True
         )
 
         ami_id = response['ImageId']
 
-        # Tag AMI
-        ec2_client.create_tags(
+        ec2.create_tags(
             Resources=[ami_id],
             Tags=[
                 {'Key': 'CreatedBy', 'Value': 'LambdaBackup'},
-                {'Key': 'Retention', 'Value': str(RETENTION_DAYS)}
+                {'Key': 'InstanceId', 'Value': instance_id},
+                {'Key': 'CreatedAt', 'Value': timestamp}
             ]
         )
 
         logger.info(f"Created AMI: {ami_id}")
         return ami_id
 
-    except Exception as e:
-        logger.error(f"Error creating AMI: {str(e)}")
+    except ClientError as e:
+        logger.error(f"Error creating AMI for {instance_id}: {e}")
         return None
 
 
+def get_cutoff_time():
+    """Dynamic retention logic"""
+    delta = datetime.timedelta(days=RETENTION_DAYS, hours=RETENTION_HOURS)
+    return datetime.datetime.utcnow() - delta
+
+
 def cleanup_old_amis():
-    """Delete AMIs older than retention period"""
+    """Delete only relevant AMIs safely"""
+    cutoff = get_cutoff_time()
+    paginator = ec2.get_paginator('describe_images')
+
     try:
-        cutoff_date = datetime.datetime.utcnow() - datetime.timedelta(days=RETENTION_DAYS)
-        #cutoff_date = datetime.datetime.utcnow() - datetime.timedelta(hours=RETENTION_HOURS)
-
-        images = ec2_client.describe_images(
+        for page in paginator.paginate(
             Owners=['self'],
-            Filters=[{'Name': 'tag:CreatedBy', 'Values': ['LambdaBackup']}]
-        )['Images']
+            Filters=[
+                {'Name': 'tag:CreatedBy', 'Values': ['LambdaBackup']},
+                {'Name': 'tag:InstanceId', 'Values': ['*']}  # ensures controlled scope
+            ]
+        ):
+            for image in page['Images']:
+                creation_date = datetime.datetime.strptime(
+                    image['CreationDate'], "%Y-%m-%dT%H:%M:%S.%fZ"
+                )
 
-        for image in images:
-            creation_date = datetime.datetime.strptime(
-                image['CreationDate'], "%Y-%m-%dT%H:%M:%S.%fZ"
-            )
+                if creation_date >= cutoff:
+                    continue
 
-            if creation_date < cutoff_date:
                 ami_id = image['ImageId']
-                logger.info(f"Deregistering AMI: {ami_id}")
+                logger.info(f"Deleting AMI: {ami_id}")
 
-                # Deregister AMI
-                ec2_client.deregister_image(ImageId=ami_id)
+                try:
+                    ec2.deregister_image(ImageId=ami_id)
 
-                # Delete associated snapshots
-                for mapping in image.get('BlockDeviceMappings', []):
-                    if 'Ebs' in mapping:
-                        snapshot_id = mapping['Ebs']['SnapshotId']
-                        logger.info(f"Deleting snapshot: {snapshot_id}")
-                        ec2_client.delete_snapshot(SnapshotId=snapshot_id)
+                    for mapping in image.get('BlockDeviceMappings', []):
+                        if 'Ebs' in mapping:
+                            snapshot_id = mapping['Ebs']['SnapshotId']
+                            try:
+                                ec2.delete_snapshot(SnapshotId=snapshot_id)
+                                logger.info(f"Deleted snapshot: {snapshot_id}")
+                            except ClientError as e:
+                                logger.warning(f"Snapshot delete failed {snapshot_id}: {e}")
 
-    except Exception as e:
-        logger.error(f"Error during cleanup: {str(e)}")
+                except ClientError as e:
+                    logger.error(f"AMI delete failed {ami_id}: {e}")
+
+    except ClientError as e:
+        logger.error(f"Cleanup error: {e}")
 
 
 def lambda_handler(event, context):
-    """Lambda entry point"""
+    logger.info("Starting backup job")
+
     instance_ids = get_instance_ids()
 
     if not instance_ids:
-        logger.warning("No matching instances found.")
-        return {"statusCode": 404, "body": "No matching instances found."}
+        logger.warning("No instances found")
+        return {"status": "no instances"}
 
-    created_amis = []
+    created = []
 
     for instance_id in instance_ids:
         ami_id = create_backup(instance_id)
         if ami_id:
-            created_amis.append(ami_id)
+            created.append(ami_id)
 
     cleanup_old_amis()
 
     return {
-        "statusCode": 200,
-        "body": f"Created AMIs: {', '.join(created_amis)}"
+        "status": "success",
+        "created_amis": created
     }
