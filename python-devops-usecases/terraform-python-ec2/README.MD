@@ -1,28 +1,213 @@
-# DevOps use cases with python
+# 🛠️ DevOps Automation with Python
 
-1. List available repositories in our GitHub account
-2. How to create a GitHub repository?
-3. How to schedule a Cron Job to start and stop instances
+This project demonstrates common **DevOps automation use cases using Python**, including GitHub operations, AWS EC2 scheduling, CloudWatch logs handling, and environment management.
 
-## How to create virtual environment in python
+---
 
-- Create a virtual environment with name "devops": `python -m venv devops`
+## 📌 Use Cases Covered
 
-- To activate a virtual environment: `source ./devops/Scripts/activate`
+### 🔹 1. List Available Repositories in GitHub
 
-- To install a package (for e.g. python): `pip install python`
+Use Python with GitHub API to fetch repositories from your account.
 
-- To uninstall a package: `pip uninstall python`
+```python
+import requests
 
-- To list all the packages that are present in an environment: `pip list --format=freeze`
+url = "https://api.github.com/user/repos"
+headers = {"Authorization": "token <YOUR_GITHUB_TOKEN>"}
 
-- A package is a collection of libraries, a library is a collection of modules and a module is a collection of functions
+response = requests.get(url, headers=headers)
 
-- All the necessary packages that are required to setup an application is defined in a file called `requirements.txt`
+for repo in response.json():
+    print(repo["name"])
+```
 
-- To install packages from the requirements.txt file, we use: `pip install -r requirements.txt`
+---
+
+### 🔹 2. Create a GitHub Repository
+
+```python
+import requests
+
+url = "https://api.github.com/user/repos"
+headers = {"Authorization": "token <YOUR_GITHUB_TOKEN>"}
+
+data = {
+    "name": "my-new-repo",
+    "private": False
+}
+
+response = requests.post(url, json=data, headers=headers)
+print(response.json())
+```
+
+---
+
+### 🔹 3. Schedule Cron Job to Start/Stop EC2 Instances
+
+Use **AWS Lambda + EventBridge (Cron)** to automate instance management.
+
+#### Example Lambda (Start EC2)
+
+```python
+import boto3
+
+ec2 = boto3.client('ec2')
+
+def lambda_handler(event, context):
+    ec2.start_instances(InstanceIds=['i-xxxxxxxx'])
+    print("EC2 Started")
+```
+
+#### Example Lambda (Stop EC2)
+
+```python
+import boto3
+
+ec2 = boto3.client('ec2')
+
+def lambda_handler(event, context):
+    ec2.stop_instances(InstanceIds=['i-xxxxxxxx'])
+    print("EC2 Stopped")
+```
+
+#### Cron Expression (EventBridge)
+
+```
+cron(0 9 * * ? *)  # Start at 9 AM daily
+cron(0 19 * * ? *) # Stop at 7 PM daily
+```
+
+---
+
+## 🐍 Python Virtual Environment Setup
+
+### 🔹 Create Virtual Environment
+
+```bash
+python -m venv devops
+```
+
+### 🔹 Activate Virtual Environment
+
+```bash
+source ./devops/Scripts/activate   # Windows Git Bash
+# or
+.\devops\Scripts\activate         # Windows CMD
+# or
+source devops/bin/activate        # Linux/Mac
+```
+
+### 🔹 Install a Package
+
+```bash
+pip install <package-name>
+```
+
+### 🔹 Uninstall a Package
+
+```bash
+pip uninstall <package-name>
+```
+
+### 🔹 List Installed Packages
+
+```bash
+pip list --format=freeze
+```
+
+---
+
+## 📦 Requirements Management
+
+### 🔹 Generate requirements.txt
+
+```bash
+pip freeze > requirements.txt
+```
+
+### 🔹 Install from requirements.txt
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 🧠 Python Concepts
+
+* **Package** → Collection of libraries
+* **Library** → Collection of modules
+* **Module** → Collection of functions
+
+---
+
+## 🐞 Debugging in Python
+
+Use built-in debugger:
+
+```python
+import pdb; pdb.set_trace()
+```
+
+---
+
+## ☁️ Fetch Logs from CloudWatch
+
+```python
+import boto3
+
+client = boto3.client('logs')
+
+response = client.filter_log_events(
+    logGroupName='your-log-group'
+)
+
+with open("logs.txt", "w") as f:
+    for event in response['events']:
+        f.write(event['message'] + "\n")
+```
+
+---
+
+## 🚀 Deploy Python Script to AWS Lambda
+
+Steps:
+
+1. Write your Python script
+2. Zip the file
+3. Upload to Lambda
+4. Attach IAM Role (EC2 permissions)
+5. Add EventBridge trigger (cron)
+
+---
 
 
-1. Fetch logs from cloudwatch and store them to a file
+## 🔐 Prerequisites
 
-2. Deploy python script to AWS lambda to start as well stop instances
+* Python 3.x
+* AWS CLI configured
+* GitHub Personal Access Token
+* Required permissions for EC2 and CloudWatch
+
+---
+
+## 💡 Notes
+
+* Never hardcode credentials → use environment variables
+* Use IAM roles instead of access keys in AWS
+* Automate everything wherever possible
+
+---
+
+## 📚 References
+
+* AWS Lambda Documentation
+* GitHub REST API Docs
+* Boto3 Documentation
+
+---
+
+
+
+
