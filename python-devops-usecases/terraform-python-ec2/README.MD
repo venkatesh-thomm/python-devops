@@ -1,49 +1,15 @@
 # 🛠️ DevOps Automation with Python
 
-This project demonstrates common **DevOps automation use cases using Python**, including GitHub operations, AWS EC2 scheduling, CloudWatch logs handling, and environment management.
-
 ---
+## what is lambda
+👉 AWS Lambda = run your code without managing servers, and you pay only when it runs [it's Event driven].
 
-## 📌 Use Cases Covered
+ ⏱️ How long does it run?
+  Minimum: a few milliseconds
+  Maximum: 15 minutes (900 seconds) per execution
 
-### 🔹 1. List Available Repositories in GitHub
-
-Use Python with GitHub API to fetch repositories from your account.
-
-```python
-import requests
-
-url = "https://api.github.com/user/repos"
-headers = {"Authorization": "token <YOUR_GITHUB_TOKEN>"}
-
-response = requests.get(url, headers=headers)
-
-for repo in response.json():
-    print(repo["name"])
-```
-
----
-
-### 🔹 2. Create a GitHub Repository
-
-```python
-import requests
-
-url = "https://api.github.com/user/repos"
-headers = {"Authorization": "token <YOUR_GITHUB_TOKEN>"}
-
-data = {
-    "name": "my-new-repo",
-    "private": False
-}
-
-response = requests.post(url, json=data, headers=headers)
-print(response.json())
-```
-
----
-
-### 🔹 3. Schedule Cron Job to Start/Stop EC2 Instances
+## 📌 Use Cases 
+### Schedule Cron Job to Start/Stop EC2 Instances
 
 Use **AWS Lambda + EventBridge (Cron)** to automate instance management.
 
