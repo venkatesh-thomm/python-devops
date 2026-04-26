@@ -1,4 +1,4 @@
-
+# IAM Role and Policy for Lambda to manage EC2 instances
 resource "aws_iam_role" "lambda_role" {
   name = "lambda_ec2_management_role"
 
@@ -11,12 +11,13 @@ resource "aws_iam_role" "lambda_role" {
           Service = "lambda.amazonaws.com"
         }
         Effect = "Allow"
-        Sid = ""
+        Sid    = ""
       },
     ]
   })
 }
 
+# IAM Policy for Lambda to manage EC2 instances
 resource "aws_iam_policy" "lambda_policy" {
   name   = "lambda_ec2_management_policy"
   policy = <<POLICY

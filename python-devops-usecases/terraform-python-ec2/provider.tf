@@ -7,7 +7,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "learninguser"
+    bucket         = "venkatesh-remote"
     key            = "python-ec2"
     region         = "us-east-1"
     dynamodb_table = "terraform_lock"

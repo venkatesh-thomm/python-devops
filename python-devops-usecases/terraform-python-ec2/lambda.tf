@@ -1,15 +1,18 @@
+# EC2 Auto Start ZIP
 data "archive_file" "ec2_auto_start_zip" {
   type        = "zip"
   source_file = "${path.module}/scripts/ec2_auto_start.py"
   output_path = "${path.module}/ec2_auto_start.zip"
 }
 
+# EC2 Auto Stop ZIP
 data "archive_file" "ec2_auto_stop_zip" {
   type        = "zip"
   source_file = "${path.module}/scripts/ec2_auto_stop.py"
   output_path = "${path.module}/ec2_auto_stop.zip"
 }
 
+# Lambda function to start EC2 instances
 resource "aws_lambda_function" "ec2_auto_start" {
   function_name = "EC2AutoStart"
   handler       = "ec2_auto_start.lambda_handler"
@@ -23,6 +26,7 @@ resource "aws_lambda_function" "ec2_auto_start" {
   depends_on = [aws_iam_policy.lambda_policy]
 }
 
+# Lambda function to stop EC2 instances
 resource "aws_lambda_function" "ec2_auto_stop" {
   function_name = "EC2AutoStop"
   handler       = "ec2_auto_stop.lambda_handler"
